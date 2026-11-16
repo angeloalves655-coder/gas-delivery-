@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Sua Loja Aqui • Pedido Rápido</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f3f4f6;
+      color: #111827;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .header-gradient {
+      background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen pb-28 max-w-md mx-auto shadow-2xl relative">
+
+  <!-- Toast de Notificação -->
+  <div id="toast" class="hidden fixed top-3 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 text-xs font-bold transition-all">
+    <span>✅</span>
+    <span id="toast-msg">Ação concluída!</span>
+  </div>
+
+  <!-- CABEÇALHO LIMPO (SEM BOTÃO BALCÃO) -->
+  <header class="header-gradient text-white p-4 rounded-b-3xl shadow-lg sticky top-0 z-30">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-2xl shadow-inner border border-white/20 shrink-0">
+        🔥
+      </div>
+      <div class="min-w-0">
+        <h1 id="header-store-name" class="text-lg font-extrabold tracking-tight leading-tight truncate">Sua Loja Aqui</h1>
+        <div class="flex flex-wrap items-center gap-1.5 mt-1">
+          <span id="store-status-badge" class="inline-flex items-center gap-1.5 bg-white/20 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+            <span id="store-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+            <span id="store-status-text">Aberto agora • 08:00 às 19:30</span>
+          </span>
+          <span id="sync-badge" class="inline-flex items-center gap-1 bg-black/20 px-2 py-0.5 rounded-full text-[11px] font-semibold">
+            ☁️ Online
+          </span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="px-4 pt-4 space-y-4">
+
+    <!-- ACOMPANHE SEU PEDIDO AO VIVO -->
+    <section id="tracking-section" class="hidden bg-white rounded-2xl p-4 shadow-sm border-2 border-orange-400">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-orange-500 animate-ping"></span>
+          <h2 class="text-sm font-extrabold text-gray-900">Acompanhe seu Pedido <span id="track-order-id" class="text-orange-600">#0000</span></h2>
+        </div>
+        <button onclick="resetOrderTracking()" title="Fechar acompanhamento" class="w-6 h-6 rounded-full bg-gray-100 text-gray-500 text-xs font-bold flex items-center justify-center hover:bg-gray-200">
+          ✕
+        </button>
+      </div>
+
+      <div class="bg-orange-50 border border-orange-100 rounded-xl p-3 flex items-start gap-3">
+        <span id="track-emoji" class="text-2xl">⏳</span>
+        <div>
+          <p id="track-title" class="text-xs font-extrabold text-gray-900">Pedido enviado! Aguardando confirmação da loja...</p>
+          <p id="track-subtitle" class="text-[11px] text-gray-600 mt-0.5">Mantenha esta tela aberta para ver quando confirmarmos.</p>
+        </div>
+      </div>
+
+      <!-- 4 Passos -->
+      <div class="grid grid-cols-4 gap-1.5 mt-3 text-center">
+        <div id="step-badge-1" class="bg-emerald-600 text-white text-[10px] font-bold py-1.5 px-1 rounded-lg shadow-2xs">1. Enviado</div>
+        <div id="step-badge-2" class="bg-gray-100 text-gray-400 text-[10px] font-bold py-1.5 px-1 rounded-lg">2. Recebido</div>
+        <div id="step-badge-3" class="bg-gray-100 text-gray-400 text-[10px] font-bold py-1.5 px-1 rounded-lg">3. Saiu Entrega</div>
+        <div id="step-badge-4" class="bg-gray-100 text-gray-400 text-[10px] font-bold py-1.5 px-1 rounded-lg">4. Entregue</div>
+      </div>
+    </section>
+
+    <!-- BANNER ENTREGA EXPRESSA -->
+    <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl bg-orange-50 w-10 h-10 rounded-xl flex items-center justify-center shrink-0">🛵</span>
+        <div>
+          <p class="text-xs font-extrabold text-gray-900">Entrega Expressa • Instalação Grátis</p>
+          <p class="text-[11px] text-gray-500 mt-0.5">Levamos a maquininha até você • Pedido direto no WhatsApp</p>
+        </div>
+      </div>
+      <span class="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase shrink-0">
+        Rápido
+      </span>
+    </div>
+
+    <!-- AVISO FORA DO HORÁRIO -->
+    <div id="closed-schedule-banner" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-start gap-3">
+      <span class="text-2xl">⏰</span>
+      <div>
+        <h3 class="text-xs font-extrabold text-amber-900">Estamos fora do horário de entrega no momento</h3>
+        <p class="text-[11px] text-amber-800 mt-0.5 leading-relaxed">Você pode montar seu pedido agora e enviar para agendar a primeira entrega!</p>
+      </div>
+    </div>
+
+    <!-- SEÇÃO 1: SEUS DADOS E ENDEREÇO -->
+    <section class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-extrabold flex items-center justify-center">1</span>
+          <h2 class="text-sm font-extrabold text-gray-900">Seus Dados e Endereço</h2>
+        </div>
+        <span id="registered-client-badge" class="hidden bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">
+          Cliente cadastrado ✓
+        </span>
+      </div>
+
+      <div class="space-y-2.5">
+        <div>
+          <label class="block text-[11px] font-bold text-gray-600 mb-1">WhatsApp / Telefone *</label>
+          <input type="tel" id="input-phone" oninput="handlePhoneLookup(this.value)" placeholder="(19) 99999-9999" class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white" />
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-gray-600 mb-1">Seu Nome *</label>
+          <input type="text" id="input-name" placeholder="Digite seu nome completo" class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white" />
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div class="col-span-2">
+            <label class="block text-[11px] font-bold text-gray-600 mb-1">Rua / Avenida *</label>
+            <input type="text" id="input-street" placeholder="Nome da rua" class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-gray-600 mb-1">Número *</label>
+            <input type="text" id="input-number" placeholder="Nº" class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] font-bold text-gray-600 mb-1">Bairro *</label>
+            <input type="text" id="input-neighborhood" placeholder="Seu bairro" class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-gray-600 mb-1">Complemento / Ref.</label>
+            <input type="text" id="input-complement" placeholder="Apto, bloco, portão..." class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-gray-600 mb-1">Observações do Pedido (opcional)</label>
+          <input type="text" id="input-obs" placeholder="Ex: Tocar campainha, portão eletrônico..." class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white" />
+        </div>
+      </div>
+    </section>
+
+    <!-- SEÇÃO 2: ESCOLHA OS PRODUTOS -->
+    <section class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-extrabold flex items-center justify-center">2</span>
+          <h2 class="text-sm font-extrabold text-gray-900">Escolha os Produtos</h2>
+        </div>
+        <span class="text-[11px] font-semibold text-gray-400">Toque em + para adicionar</span>
+      </div>
+
+      <div id="products-list" class="space-y-2.5"></div>
+
+      <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2.5 mt-3">
+        <span class="text-lg">🛡️</span>
+        <p class="text-[11px] text-blue-900 leading-relaxed">
+          <strong>Dica de Segurança:</strong> O registro e a mangueira têm validade de <strong>5 anos</strong> (gravada no corpo da peça). Se estiver vencido ou ressecado, adicione um <strong>Kit Registro + Mangueira</strong> acima que instalamos na hora!
+        </p>
+      </div>
+    </section>
+
+    <!-- SEÇÃO 3: FORMA DE PAGAMENTO E CUPOM -->
+    <section class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+      <div class="flex items-center gap-2">
+        <span class="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-extrabold flex items-center justify-center">3</span>
+        <h2 class="text-sm font-extrabold text-gray-900">Forma de Pagamento</h2>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <button type="button" onclick="selectPayment('Pix')" id="pay-btn-Pix" class="pay-option border-2 border-orange-600 bg-orange-50 text-orange-700 rounded-xl p-2.5 text-center transition">
+          <span class="block text-lg">💠</span>
+          <span class="text-xs font-extrabold">Pix</span>
+        </button>
+        <button type="button" onclick="selectPayment('Cartão')" id="pay-btn-Cartão" class="pay-option border border-gray-200 bg-gray-50 text-gray-700 rounded-xl p-2.5 text-center transition">
+          <span class="block text-lg">💳</span>
+          <span class="text-xs font-extrabold">Cartão</span>
+        </button>
+        <button type="button" onclick="selectPayment('Dinheiro')" id="pay-btn-Dinheiro" class="pay-option border border-gray-200 bg-gray-50 text-gray-700 rounded-xl p-2.5 text-center transition">
+          <span class="block text-lg">💵</span>
+          <span class="text-xs font-extrabold">Dinheiro</span>
+        </button>
+      </div>
+
+      <div id="pix-box" class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between gap-2">
+        <div>
+          <p class="text-[10px] font-bold text-emerald-700 uppercase">Chave Pix (Copiar)</p>
+          <p id="pix-key-display" class="text-xs font-extrabold text-emerald-950 mt-0.5">00.000.000/0001-00</p>
+        </div>
+        <button type="button" onclick="copyPixKey()" class="bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-2xs active:scale-95">
+          Copiar Pix
+        </button>
+      </div>
+
+      <div id="cash-box" class="hidden">
+        <label class="block text-[11px] font-bold text-gray-600 mb-1">Precisa de troco para quanto?</label>
+        <input type="text" id="input-change" placeholder="Ex: Troco para R$ 150,00 (ou deixe vazio)" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-orange-500" />
+      </div>
+
+      <div class="pt-2 border-t border-gray-100">
+        <label class="block text-[11px] font-bold text-gray-600 mb-1">Cupom de Desconto</label>
+        <div class="flex gap-2">
+          <input type="text" id="input-coupon" placeholder="Digite o código do cupom" class="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs uppercase font-bold focus:outline-none focus:ring-2 focus:ring-orange-500" />
+          <button type="button" onclick="applyCoupon()" class="bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-xl active:scale-95">
+            Aplicar
+          </button>
+        </div>
+        <p id="coupon-feedback" class="hidden text-[11px] font-bold mt-1.5"></p>
+      </div>
+    </section>
+
+    <!-- INFORMAÇÕES DA LOJA -->
+    <section class="space-y-3 pb-4">
+      <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100 flex items-center justify-between gap-2">
+        <div class="flex items-start gap-2.5">
+          <span class="text-xl">📍</span>
+          <div>
+            <p class="text-xs font-extrabold text-gray-900">Retirada na Portaria / Nossa Loja</p>
+            <p id="store-address-display" class="text-[11px] text-gray-500 mt-0.5">Endereço da Sua Loja Aqui, 100 - Centro</p>
+          </div>
+        </div>
+        <a id="store-gps-link" href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" class="bg-blue-50 text-blue-700 px-3 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1 shrink-0">
+          <span>🧭</span>
+          <span>GPS</span>
+        </a>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <div class="flex items-center justify-between mb-2.5">
+          <h3 class="text-xs font-extrabold text-gray-900">🕒 Horário de Atendimento</h3>
+          <span id="today-hours-badge" class="text-[10px] font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+            Hoje: 08:00 às 19:30
+          </span>
+        </div>
+        <div id="weekly-hours-list" class="space-y-1 text-[11px] text-gray-600"></div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100 flex items-center justify-between gap-2">
+        <div>
+          <p class="text-xs font-extrabold text-gray-900">Já comprou com a gente?</p>
+          <p class="text-[11px] text-gray-500">Sua avaliação no Google ajuda muito!</p>
+        </div>
+        <a id="store-review-link" href="https://g.page/r/" target="_blank" rel="noopener noreferrer" class="bg-amber-100 text-amber-800 px-3 py-2 rounded-xl text-xs font-extrabold shrink-0">
+          ⭐ Avaliar
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- BOTÃO FLUTUANTE WHATSAPP ATENDENTE -->
+  <div class="fixed bottom-24 left-0 right-0 max-w-md mx-auto px-4 pointer-events-none z-30 flex justify-end">
+    <a id="floating-wa-btn" href="https://wa.me/5519994604562" target="_blank" rel="noopener noreferrer" class="pointer-events-auto bg-[#25D366] hover:bg-[#1ebe5d] text-white px-3.5 py-2.5 rounded-full shadow-lg shadow-emerald-600/30 flex items-center gap-2 active:scale-95 transition border-2 border-white">
+      <svg class="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zm-3.423-14.416c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm.029 18.88c-1.161 0-2.305-.292-3.318-.844l-3.677.964.984-3.595c-.607-1.052-.927-2.246-.926-3.468.001-3.825 3.113-6.937 6.937-6.937 1.856.001 3.598.723 4.907 2.034 1.31 1.311 2.031 3.054 2.03 4.908-.001 3.825-3.113 6.938-6.937 6.938z"/>
+      </svg>
+      <span class="text-xs font-extrabold">Falar com Atendente</span>
+    </a>
+  </div>
+
+  <!-- BARRA FIXA INFERIOR -->
+  <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-30">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <p class="text-[11px] font-semibold text-gray-500">Total (<span id="cart-count">1</span> <span id="cart-item-label">item</span>)</p>
+        <p id="cart-total" class="text-lg font-black text-gray-950">R$ 130,00</p>
+      </div>
+      <button onclick="submitOrder()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-5 py-3.5 rounded-2xl shadow-lg shadow-emerald-600/20 flex items-center gap-2 active:scale-95 transition">
+        <span>Enviar Pedido no WhatsApp</span>
+        <span>➔</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- FIREBASE SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, set, get, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    // =========================================================================
+    // COLE AQUI AS CREDENCIAIS DO SEU PROJETO FIREBASE (IGUAL NOS DOIS ARQUIVOS)
+    // =========================================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyA8jmhsNoF6x6rU2o7JBRk6obifdOek7vY",
+      authDomain: "gas-delivery-f5def.firebaseapp.com",
+      databaseURL: "https://gas-delivery-f5def-default-rtdb.firebaseio.com",
+      projectId: "gas-delivery-f5def",
+      storageBucket: "gas-delivery-f5def.firebasestorage.app",
+      messagingSenderId: "916457817233",
+      appId: "1:916457817233:web:f302794f05447c7c13eb30"
+    };
+
+    const isFirebaseConfigured = firebaseConfig.apiKey !== "SUA_API_KEY_AQUI";
+    let db = null;
+
+    if (isFirebaseConfigured) {
+      const app = initializeApp(firebaseConfig);
+      db = getDatabase(app);
+    }
+
+    // DADOS PADRÃO (Caso o Firebase ainda não tenha sido configurado)
+    const DEFAULT_STATE = {
+      storeName: "Sua Loja Aqui",
+      whatsapp: "5519994604562",
+      pixKey: "00.000.000/0001-00",
+      address: "Endereço da Sua Loja Aqui, 100 - Centro",
+      statusMode: "open",
+      products: [
+        { id: "p13", name: "Gás de Cozinha P13 (13kg)", desc: "Botijão tradicional residencial • Instalação grátis", price: 130.00, icon: "🔥", badge: "Mais Pedido" },
+        { id: "p20", name: "Gás P20 (Empilhadeira)", desc: "Cilindro industrial para empilhadeiras • Troca rápida", price: 210.00, icon: "🏭", badge: "" },
+        { id: "p45", name: "Gás P45 (45kg Comercial)", desc: "Ideal para comércios, padarias e restaurantes", price: 450.00, icon: "🏢", badge: "" },
+        { id: "agua20", name: "Água Mineral 20L (Recarga)", desc: "Galão de 20 litros lacrado (somente o líquido)", price: 16.00, icon: "💧", badge: "" },
+        { id: "kit_reg", name: "Kit Registro + Mangueira", desc: "Regulador de pressão + mangueira normativa + abraçadeiras (Instalado)", price: 55.00, icon: "🔧", badge: "Validade 5 anos" }
+      ],
+      coupons: [
+        { code: "GAS10", discount: 10.00, desc: "R$ 10,00 de desconto no pedido", active: true }
+      ],
+      hours: [
+        { day: "Segunda-feira", open: "08:00", close: "19:30", active: true },
+        { day: "Terça-feira", open: "08:00", close: "19:30", active: true },
+        { day: "Quarta-feira", open: "08:00", close: "19:30", active: true },
+        { day: "Quinta-feira", open: "08:00", close: "19:30", active: true },
+        { day: "Sexta-feira", open: "08:00", close: "19:30", active: true },
+        { day: "Sábado", open: "08:00", close: "18:00", active: true },
+        { day: "Domingo", open: "08:00", close: "13:00", active: true }
+      ]
+    };
+
+    let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    let clientsMap = {};
+    let cart = { p13: 1 };
+    let selectedPayment = "Pix";
+    let appliedCoupon = null;
+    let activeClientSpecialPrices = null;
+    let activeOrderId = localStorage.getItem("cliente_pedido_ativo_id") || null;
+
+    // ESCUTA EM TEMPO REAL DO FIREBASE
+    if (db) {
+      document.getElementById("sync-badge").innerText = "☁️ Nuvem Conectada";
+      onValue(ref(db, "config"), (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          state = {
+            ...DEFAULT_STATE,
+            ...data,
+            products: data.products ? Object.values(data.products) : DEFAULT_STATE.products,
+            coupons: data.coupons ? Object.values(data.coupons) : [],
+            hours: data.hours ? Object.values(data.hours) : DEFAULT_STATE.hours
+          };
+          renderApp();
+        }
+      });
+
+      onValue(ref(db, "clients"), (snapshot) => {
+        clientsMap = snapshot.exists() ? snapshot.val() : {};
+        const phoneVal = document.getElementById("input-phone").value;
+        if (phoneVal) handlePhoneLookup(phoneVal);
+      });
+
+      if (activeOrderId) {
+        listenToActiveOrder(activeOrderId);
+      }
+    } else {
+      document.getElementById("sync-badge").innerText = "⚠️ Modo Local (Configure Firebase)";
+    }
+
+    function listenToActiveOrder(orderId) {
+      if (!db || !orderId) return;
+      document.getElementById("tracking-section").classList.remove("hidden");
+      document.getElementById("track-order-id").innerText = "#" + orderId;
+
+      onValue(ref(db, `orders/${orderId}`), (snapshot) => {
+        if (snapshot.exists()) {
+          const order = snapshot.val();
+          updateTrackingUI(order.step || 1);
+        }
+      });
+    }
+
+    function updateTrackingUI(step) {
+      const titles = {
+        1: "Pedido enviado! Aguardando confirmação da loja...",
+        2: "Pedido recebido! Estamos preparando seu gás.",
+        3: "O entregador já saiu com o seu pedido! 🛵",
+        4: "Pedido entregue! Muito obrigado pela preferência."
+      };
+      const subtitles = {
+        1: "Mantenha esta tela aberta para ver quando confirmarmos.",
+        2: "Logo o entregador sairá em direção ao seu endereço.",
+        3: "Fique atento ao portão ou interfone.",
+        4: "Avalie nosso atendimento no Google!"
+      };
+      const emojis = { 1: "⏳", 2: "👍", 3: "🛵", 4: "✅" };
+
+      document.getElementById("track-title").innerText = titles[step] || titles[1];
+      document.getElementById("track-subtitle").innerText = subtitles[step] || subtitles[1];
+      document.getElementById("track-emoji").innerText = emojis[step] || "⏳";
+
+      for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById("step-badge-" + i);
+        el.className = i <= step
+          ? "bg-emerald-600 text-white text-[10px] font-bold py-1.5 px-1 rounded-lg shadow-2xs"
+          : "bg-gray-100 text-gray-400 text-[10px] font-bold py-1.5 px-1 rounded-lg";
+      }
+    }
+
+    window.resetOrderTracking = () => {
+      localStorage.removeItem("cliente_pedido_ativo_id");
+      activeOrderId = null;
+      document.getElementById("tracking-section").classList.add("hidden");
+    };
+
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      document.getElementById("toast-msg").innerText = msg;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
+    }
+
+    function formatBRL(val) {
+      return "R$ " + Number(val).toFixed(2).replace(".", ",");
+    }
+
+    function checkStoreOpen() {
+      if (state.statusMode === "open") return true;
+      if (state.statusMode === "closed") return false;
+      const now = new Date();
+      const dayIdx = (now.getDay() + 6) % 7;
+      const todayCfg = state.hours[dayIdx];
+      if (!todayCfg || !todayCfg.active) return false;
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const [oh, om] = todayCfg.open.split(":").map(Number);
+      const [ch, cm] = todayCfg.close.split(":").map(Number);
+      return currentMinutes >= (oh * 60 + om) && currentMinutes <= (ch * 60 + cm);
+    }
+
+    function renderApp() {
+      document.getElementById("header-store-name").innerText = state.storeName;
+      document.title = `${state.storeName} • Pedido Rápido`;
+      document.getElementById("pix-key-display").innerText = state.pixKey;
+      document.getElementById("store-address-display").innerText = state.address;
+      document.getElementById("store-gps-link").href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(state.address)}`;
+
+      const waMsg = encodeURIComponent(`Olá! Gostaria de falar com um atendente da ${state.storeName}.`);
+      document.getElementById("floating-wa-btn").href = `https://wa.me/${state.whatsapp}?text=${waMsg}`;
+
+      const now = new Date();
+      const todayIdx = (now.getDay() + 6) % 7;
+      const todayCfg = state.hours[todayIdx];
+      const scheduleLabel = todayCfg && todayCfg.active ? `${todayCfg.open} às ${todayCfg.close}` : "Fechado hoje";
+
+      const isOpen = checkStoreOpen();
+      const statusDot = document.getElementById("store-status-dot");
+      const statusText = document.getElementById("store-status-text");
+      const closedBanner = document.getElementById("closed-schedule-banner");
+
+      if (isOpen) {
+        statusDot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0";
+        statusText.innerText = `Aberto agora • ${scheduleLabel}`;
+        closedBanner.classList.add("hidden");
+      } else {
+        statusDot.className = "w-2 h-2 rounded-full bg-red-400 shrink-0";
+        statusText.innerText = `Fechado agora • ${scheduleLabel}`;
+        closedBanner.classList.remove("hidden");
+      }
+
+      document.getElementById("today-hours-badge").innerText = `Hoje: ${scheduleLabel}`;
+      document.getElementById("weekly-hours-list").innerHTML = state.hours.map((h, i) => `
+        <div class="flex justify-between py-0.5 ${i === todayIdx ? 'font-extrabold text-orange-600' : ''}">
+          <span>${h.day}</span>
+          <span>${h.active ? `${h.open} às ${h.close}` : 'Fechado'}</span>
+        </div>
+      `).join("");
+
+      renderProducts();
+      updateCartTotals();
+    }
+
+    function getEffectivePrice(product) {
+      if (activeClientSpecialPrices && activeClientSpecialPrices[product.id]) {
+        return Number(activeClientSpecialPrices[product.id]);
+      }
+      return Number(product.price);
+    }
+
+    function renderProducts() {
+      const container = document.getElementById("products-list");
+      container.innerHTML = state.products.map(prod => {
+        const qty = cart[prod.id] || 0;
+        const price = getEffectivePrice(prod);
+        const hasSpecial = activeClientSpecialPrices && activeClientSpecialPrices[prod.id];
+
+        return `
+          <div class="p-3 rounded-2xl border ${qty > 0 ? 'border-orange-500 bg-orange-50/30' : 'border-gray-200 bg-white'} flex items-center justify-between gap-3 transition">
+            <div class="flex items-start gap-3">
+              <div class="w-11 h-11 rounded-xl bg-orange-100/70 flex items-center justify-center text-2xl shrink-0">
+                ${prod.icon || "🔥"}
+              </div>
+              <div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <h3 class="text-xs font-extrabold text-gray-900">${prod.name}</h3>
+                  ${prod.badge ? `<span class="bg-orange-100 text-orange-700 text-[9px] font-extrabold px-2 py-0.5 rounded-full">${prod.badge}</span>` : ''}
+                  ${hasSpecial ? `<span class="bg-emerald-100 text-emerald-700 text-[9px] font-extrabold px-2 py-0.5 rounded-full">Preço Especial</span>` : ''}
+                </div>
+                <p class="text-[11px] text-gray-500 mt-0.5 leading-snug">${prod.desc}</p>
+                <p class="text-sm font-black text-orange-600 mt-1">${formatBRL(price)}</p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 bg-gray-100 p-1 rounded-xl border border-gray-200 shrink-0">
+              <button type="button" onclick="changeQty('${prod.id}', -1)" class="w-7 h-7 rounded-lg bg-white text-gray-800 font-black shadow-2xs active:scale-90">-</button>
+              <span class="w-5 text-center text-xs font-extrabold">${qty}</span>
+              <button type="button" onclick="changeQty('${prod.id}', 1)" class="w-7 h-7 rounded-lg bg-orange-600 text-white font-black shadow-2xs active:scale-90">+</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    window.changeQty = (id, delta) => {
+      const next = Math.max(0, (cart[id] || 0) + delta);
+      if (next === 0) delete cart[id];
+      else cart[id] = next;
+      renderProducts();
+      updateCartTotals();
+    };
+
+    function updateCartTotals() {
+      let count = 0;
+      let subtotal = 0;
+      state.products.forEach(p => {
+        const q = cart[p.id] || 0;
+        count += q;
+        subtotal += q * getEffectivePrice(p);
+      });
+
+      const discount = (count > 0 && appliedCoupon) ? Number(appliedCoupon.discount) : 0;
+      const total = Math.max(0, subtotal - discount);
+
+      document.getElementById("cart-count").innerText = count;
+      document.getElementById("cart-item-label").innerText = count === 1 ? "item" : "itens";
+      document.getElementById("cart-total").innerText = formatBRL(total);
+      return { count, subtotal, discount, total };
+    }
+
+    window.selectPayment = (method) => {
+      selectedPayment = method;
+      ["Pix", "Cartão", "Dinheiro"].forEach(m => {
+        const btn = document.getElementById("pay-btn-" + m);
+        btn.className = m === method
+          ? "pay-option border-2 border-orange-600 bg-orange-50 text-orange-700 rounded-xl p-2.5 text-center transition"
+          : "pay-option border border-gray-200 bg-gray-50 text-gray-700 rounded-xl p-2.5 text-center transition";
+      });
+      document.getElementById("pix-box").classList.toggle("hidden", method !== "Pix");
+      document.getElementById("cash-box").classList.toggle("hidden", method !== "Dinheiro");
+    };
+
+    window.copyPixKey = () => {
+      navigator.clipboard.writeText(state.pixKey);
+      showToast("Chave Pix copiada!");
+    };
+
+    window.applyCoupon = () => {
+      const code = document.getElementById("input-coupon").value.trim().toUpperCase();
+      const fb = document.getElementById("coupon-feedback");
+      const found = state.coupons.find(c => c.code.toUpperCase() === code && c.active);
+
+      fb.classList.remove("hidden");
+      if (found) {
+        appliedCoupon = found;
+        fb.className = "text-[11px] font-bold mt-1.5 text-emerald-600";
+        fb.innerText = `✓ Cupom ${found.code} aplicado! Desconto de ${formatBRL(found.discount)}`;
+        showToast("Cupom aplicado!");
+      } else {
+        appliedCoupon = null;
+        fb.className = "text-[11px] font-bold mt-1.5 text-red-600";
+        fb.innerText = "✕ Cupom inválido ou expirado.";
+      }
+      updateCartTotals();
+    };
+
+    window.handlePhoneLookup = (val) => {
+      const digits = val.replace(/\D/g, "");
+      const badge = document.getElementById("registered-client-badge");
+      if (digits.length < 8) {
+        badge.classList.add("hidden");
+        activeClientSpecialPrices = null;
+        renderProducts();
+        updateCartTotals();
+        return;
+      }
+
+      const client = clientsMap[digits];
+      if (client) {
+        badge.classList.remove("hidden");
+        if (!document.getElementById("input-name").value) document.getElementById("input-name").value = client.name || "";
+        if (!document.getElementById("input-street").value) document.getElementById("input-street").value = client.street || "";
+        if (!document.getElementById("input-number").value) document.getElementById("input-number").value = client.number || "";
+        if (!document.getElementById("input-neighborhood").value) document.getElementById("input-neighborhood").value = client.neighborhood || "";
+        activeClientSpecialPrices = client.specialPrices || null;
+        renderProducts();
+        updateCartTotals();
+      } else {
+        badge.classList.add("hidden");
+        activeClientSpecialPrices = null;
+        renderProducts();
+        updateCartTotals();
+      }
+    };
+
+    window.submitOrder = async () => {
+      const { count, discount, total } = updateCartTotals();
+      if (count === 0) {
+        alert("Adicione pelo menos 1 produto ao carrinho!");
+        return;
+      }
+
+      const phone = document.getElementById("input-phone").value.trim();
+      const name = document.getElementById("input-name").value.trim();
+      const street = document.getElementById("input-street").value.trim();
+      const number = document.getElementById("input-number").value.trim();
+      const neighborhood = document.getElementById("input-neighborhood").value.trim();
+      const complement = document.getElementById("input-complement").value.trim();
+      const obs = document.getElementById("input-obs").value.trim();
+      const change = document.getElementById("input-change").value.trim();
+
+      if (!phone || !name || !street || !number || !neighborhood) {
+        alert("Por favor, preencha seu Telefone, Nome e Endereço completo.");
+        return;
+      }
+
+      const digits = phone.replace(/\D/g, "");
+      const orderCode = String(Math.floor(1000 + Math.random() * 9000));
+
+      let itemsList = [];
+      let itemsText = "";
+      state.products.forEach(p => {
+        if (cart[p.id]) {
+          const unitPrice = getEffectivePrice(p);
+          const lineTotal = formatBRL(cart[p.id] * unitPrice);
+          itemsText += `• ${cart[p.id]}x ${p.name} (${lineTotal})\n`;
+          itemsList.push({ name: p.name, qty: cart[p.id], subtotal: cart[p.id] * unitPrice });
+        }
+      });
+
+      // SALVA CLIENTE E PEDIDO NO FIREBASE EM TEMPO REAL
+      if (db) {
+        try {
+          const existingSpecial = (clientsMap[digits] && clientsMap[digits].specialPrices) ? clientsMap[digits].specialPrices : {};
+          await set(ref(db, `clients/${digits}`), {
+            name,
+            phone,
+            street,
+            number,
+            neighborhood,
+            specialPrices: existingSpecial,
+            updatedAt: Date.now()
+          });
+
+          const nowObj = new Date();
+          const localDateStr = nowObj.getFullYear() + "-" + String(nowObj.getMonth() + 1).padStart(2, "0") + "-" + String(nowObj.getDate()).padStart(2, "0");
+
+          await set(ref(db, `orders/${orderCode}`), {
+            id: orderCode,
+            orderDate: localDateStr,
+            customerName: name,
+            customerPhone: phone,
+            address: `${street}, ${number} - ${neighborhood}${complement ? ' (' + complement + ')' : ''}`,
+            payment: `${selectedPayment}${selectedPayment === 'Dinheiro' && change ? ' - ' + change : ''}`,
+            obs,
+            coupon: appliedCoupon ? appliedCoupon.code : "",
+            discount,
+            total,
+            items: itemsList,
+            step: 1,
+            createdAt: Date.now()
+          });
+
+          localStorage.setItem("cliente_pedido_ativo_id", orderCode);
+          activeOrderId = orderCode;
+          listenToActiveOrder(orderCode);
+        } catch (err) {
+          console.error("Erro ao salvar no Firebase:", err);
+        }
+      } else {
+        document.getElementById("tracking-section").classList.remove("hidden");
+        document.getElementById("track-order-id").innerText = "#" + orderCode;
+        updateTrackingUI(1);
+      }
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      showToast("Pedido enviado!");
+
+      let msg = `*NOVO PEDIDO #${orderCode} - ${state.storeName.toUpperCase()}*\n\n` +
+        `👤 *Cliente:* ${name}\n` +
+        `📱 *WhatsApp:* ${phone}\n` +
+        `📍 *Endereço:* ${street}, ${number} - ${neighborhood}${complement ? ' (' + complement + ')' : ''}\n` +
+        `💳 *Pagamento:* ${selectedPayment}${selectedPayment === 'Dinheiro' && change ? ' - ' + change : ''}\n`;
+
+      if (discount > 0 && appliedCoupon) {
+        msg += `🎟️ *Cupom:* ${appliedCoupon.code} (-${formatBRL(discount)})\n`;
+      }
+      if (obs) {
+        msg += `📝 *Obs:* ${obs}\n`;
+      }
+
+      msg += `\n*ITENS DO PEDIDO:*\n${itemsText}\n` +
+        `💰 *TOTAL: ${formatBRL(total)}*`;
+
+      window.open(`https://wa.me/${state.whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
+    };
+
+    // Inicializa
+    renderApp();
+  </script>
+</body>
+</html>
