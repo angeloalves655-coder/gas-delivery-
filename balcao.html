@@ -165,12 +165,18 @@
       <!-- ABA 4: CLIENTES CADASTRADOS -->
       <section id="pane-clients" class="hidden space-y-4">
         <div>
-          <h2 class="text-sm font-extrabold text-gray-900">Base de Clientes & Preços Especiais</h2>
-          <p class="text-[11px] text-gray-500">Clientes novos são salvos automaticamente ao fazerem o primeiro pedido</p>
+          <h2 class="text-sm font-extrabold text-gray-900">Base de Clientes, Histórico & Preços Especiais</h2>
+          <p class="text-[11px] text-gray-500">Edite dados, defina valores especiais ou consulte todos os pedidos e pagamentos de cada cliente</p>
         </div>
 
-        <div class="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2.5">
-          <p class="text-xs font-extrabold text-gray-800">Cadastrar / Atualizar Cliente Manualmente</p>
+        <div id="client-form-box" class="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2.5 transition">
+          <div class="flex items-center justify-between">
+            <p id="client-form-title" class="text-xs font-extrabold text-gray-800">Cadastrar / Atualizar Cliente Manualmente</p>
+            <button type="button" id="btn-cancel-edit-client" onclick="cancelEditClient()" class="hidden text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-1 rounded-lg">
+              Cancelar Edição ✕
+            </button>
+          </div>
+          <input type="hidden" id="cli-editing-digits" value="" />
           <div class="grid grid-cols-2 gap-2">
             <input type="text" id="cli-name" placeholder="Nome do Cliente *" class="px-3 py-2 bg-white border border-gray-300 rounded-xl text-xs" />
             <input type="tel" id="cli-phone" placeholder="Telefone / WhatsApp *" class="px-3 py-2 bg-white border border-gray-300 rounded-xl text-xs" />
@@ -199,25 +205,47 @@
             </div>
           </div>
 
-          <button onclick="saveClient()" class="w-full bg-gray-900 text-white font-bold py-2.5 rounded-xl text-xs">
+          <button id="btn-save-client" onclick="saveClient()" class="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-2.5 rounded-xl text-xs transition">
             + Salvar Cliente na Nuvem
           </button>
         </div>
 
-        <div class="overflow-x-auto bg-white border border-gray-200 rounded-xl">
-          <table class="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-200 text-gray-600">
-                <th class="p-3 font-extrabold">Cliente</th>
-                <th class="p-3 font-extrabold">Endereço</th>
-                <th class="p-3 font-extrabold">Tabela</th>
-                <th class="p-3 font-extrabold text-right">Ação</th>
-              </tr>
-            </thead>
-            <tbody id="admin-clients-tbody"></tbody>
-          </table>
+        <!-- Campo de Busca de Clientes -->
+        <div>
+          <input type="text" id="client-search-input" oninput="renderClients()" placeholder="🔍 Buscar cliente por nome, telefone ou bairro..." class="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500" />
         </div>
+
+        <!-- Lista de Cards de Clientes (Responsivo para Celular e PC) -->
+        <div id="admin-clients-list" class="space-y-2.5"></div>
       </section>
+
+      <!-- MODAL HISTÓRICO DE PEDIDOS DO CLIENTE -->
+      <div id="client-history-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div class="bg-gray-900 text-white p-4 flex items-center justify-between">
+            <div>
+              <h3 id="modal-cli-name" class="text-sm font-extrabold">Histórico do Cliente</h3>
+              <p id="modal-cli-sub" class="text-[11px] text-gray-400 mt-0.5"></p>
+            </div>
+            <button onclick="closeClientHistoryModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center justify-center">
+              ✕
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 p-3 bg-gray-50 border-b border-gray-200 text-center">
+            <div class="bg-white border border-gray-200 rounded-xl p-2.5">
+              <span class="block text-[10px] font-bold text-gray-500 uppercase">Total de Pedidos</span>
+              <span id="modal-cli-total-orders" class="text-base font-black text-gray-900">0</span>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl p-2.5">
+              <span class="block text-[10px] font-bold text-gray-500 uppercase">Total Pago / Gasto</span>
+              <span id="modal-cli-total-spent" class="text-base font-black text-emerald-600">R$ 0,00</span>
+            </div>
+          </div>
+
+          <div id="modal-cli-orders-list" class="p-4 overflow-y-auto space-y-2.5 flex-1"></div>
+        </div>
+      </div>
 
       <!-- ABA 5: LOJA E HORÁRIOS -->
       <section id="pane-store" class="hidden space-y-4">
@@ -374,6 +402,7 @@
       onValue(ref(db, "orders"), (snapshot) => {
         ordersMap = snapshot.exists() ? snapshot.val() : {};
         renderLiveOrders();
+        renderClients();
       });
 
       onValue(ref(db, "clients"), (snapshot) => {
@@ -639,41 +668,188 @@
     };
 
     // CLIENTES
-    function renderClients() {
-      const tbody = document.getElementById("admin-clients-tbody");
-      const list = Object.entries(clientsMap);
-      document.getElementById("clients-tab-count").innerText = list.length;
+    function getClientOrders(digits) {
+      const allOrders = Object.values(ordersMap || {});
+      return allOrders
+        .filter(o => (o.customerPhone || "").replace(/\D/g, "") === digits)
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }
 
-      if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400">Nenhum cliente cadastrado ainda.</td></tr>`;
+    window.renderClients = () => {
+      const container = document.getElementById("admin-clients-list");
+      const searchInput = document.getElementById("client-search-input");
+      const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+      const allEntries = Object.entries(clientsMap);
+      document.getElementById("clients-tab-count").innerText = allEntries.length;
+
+      const filtered = allEntries.filter(([digits, c]) => {
+        if (!query) return true;
+        const text = `${c.name || ""} ${c.phone || ""} ${digits} ${c.street || ""} ${c.neighborhood || ""}`.toLowerCase();
+        return text.includes(query);
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="bg-gray-50 border border-gray-200 rounded-2xl p-6 text-center text-gray-400 text-xs">
+          ${allEntries.length === 0 ? "Nenhum cliente cadastrado ainda." : "Nenhum cliente encontrado para essa busca."}
+        </div>`;
         return;
       }
 
-      tbody.innerHTML = list.map(([digits, c]) => {
+      const stepLabels = { 1: "Enviado", 2: "Recebido", 3: "Saiu Entrega", 4: "Entregue" };
+
+      container.innerHTML = filtered.map(([digits, c]) => {
         const sp = c.specialPrices || {};
         const tags = [];
-        if (sp.p13) tags.push(`P13: R$${sp.p13}`);
-        if (sp.p20) tags.push(`P20: R$${sp.p20}`);
-        if (sp.p45) tags.push(`P45: R$${sp.p45}`);
+        if (sp.p13) tags.push(`P13: ${formatBRL(sp.p13)}`);
+        if (sp.p20) tags.push(`P20: ${formatBRL(sp.p20)}`);
+        if (sp.p45) tags.push(`P45: ${formatBRL(sp.p45)}`);
+
+        const clientOrders = getClientOrders(digits);
+        const totalSpent = clientOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+        const lastOrder = clientOrders[0];
 
         return `
-          <tr class="border-b border-gray-100">
-            <td class="p-3">
-              <p class="font-bold text-gray-900">${c.name}</p>
-              <p class="text-[11px] text-orange-600">${c.phone}</p>
-            </td>
-            <td class="p-3 text-gray-600">${c.street || ''} ${c.number || ''} - ${c.neighborhood || ''}</td>
-            <td class="p-3 text-[11px] font-bold text-emerald-700">${tags.length ? tags.join(", ") : "Padrão"}</td>
-            <td class="p-3 text-right">
-              <button onclick="deleteClient('${digits}')" class="text-red-600 font-bold">✕</button>
-            </td>
-          </tr>
+          <div class="bg-white border border-gray-200 rounded-2xl p-3.5 shadow-2xs space-y-2.5">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h3 class="text-xs font-extrabold text-gray-900">${c.name}</h3>
+                <p class="text-[11px] font-bold text-orange-600 mt-0.5">📱 ${c.phone}</p>
+                <p class="text-[11px] text-gray-500 mt-0.5">📍 ${c.street || ''}${c.number ? ', ' + c.number : ''}${c.neighborhood ? ' - ' + c.neighborhood : ''}</p>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button onclick="openClientHistoryModal('${digits}')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-extrabold px-2.5 py-1.5 rounded-xl transition">
+                  🧾 Pedidos (${clientOrders.length})
+                </button>
+                <button onclick="editClient('${digits}')" class="bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-extrabold px-2.5 py-1.5 rounded-xl transition">
+                  ✏️ Editar
+                </button>
+                <button onclick="deleteClient('${digits}')" title="Excluir cliente" class="bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-extrabold px-2 py-1.5 rounded-xl transition">
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100 text-[11px]">
+              <div>
+                <span class="text-gray-500 font-semibold">Tabela: </span>
+                <span class="font-extrabold ${tags.length ? 'text-emerald-700' : 'text-gray-700'}">${tags.length ? tags.join(" • ") : "Padrão"}</span>
+              </div>
+              <div class="bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-lg font-extrabold">
+                Total Pago: ${formatBRL(totalSpent)}
+              </div>
+            </div>
+
+            ${lastOrder ? `
+              <div class="bg-gray-50 rounded-xl px-3 py-2 text-[11px] text-gray-600 flex items-center justify-between gap-2">
+                <span class="truncate">Último: <strong>#${lastOrder.id}</strong> (${(lastOrder.items || []).map(i => i.qty + 'x ' + i.name).join(', ')})</span>
+                <span class="font-extrabold text-gray-900 shrink-0">${formatBRL(lastOrder.total)} • ${stepLabels[lastOrder.step || 1]}</span>
+              </div>
+            ` : ''}
+          </div>
         `;
       }).join("");
-    }
+    };
+
+    window.editClient = (digits) => {
+      const c = clientsMap[digits];
+      if (!c) return;
+
+      document.getElementById("cli-editing-digits").value = digits;
+      document.getElementById("cli-name").value = c.name || "";
+      document.getElementById("cli-phone").value = c.phone || digits;
+      document.getElementById("cli-street").value = c.street || "";
+      document.getElementById("cli-number").value = c.number || "";
+      document.getElementById("cli-neighborhood").value = c.neighborhood || "";
+
+      const sp = c.specialPrices || {};
+      document.getElementById("cli-p13").value = sp.p13 || "";
+      document.getElementById("cli-p20").value = sp.p20 || "";
+      document.getElementById("cli-p45").value = sp.p45 || "";
+
+      document.getElementById("client-form-title").innerText = `✏️ Editando Cliente: ${c.name}`;
+      document.getElementById("client-form-box").className = "bg-amber-50/70 p-4 rounded-2xl border-2 border-amber-400 space-y-2.5 transition";
+      document.getElementById("btn-cancel-edit-client").classList.remove("hidden");
+      document.getElementById("btn-save-client").innerText = "💾 Salvar Alterações do Cliente";
+      document.getElementById("btn-save-client").className = "w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl text-xs transition";
+
+      document.getElementById("client-form-box").scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+
+    window.cancelEditClient = () => {
+      document.getElementById("cli-editing-digits").value = "";
+      ["cli-name", "cli-phone", "cli-street", "cli-number", "cli-neighborhood", "cli-p13", "cli-p20", "cli-p45"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+      document.getElementById("client-form-title").innerText = "Cadastrar / Atualizar Cliente Manualmente";
+      document.getElementById("client-form-box").className = "bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2.5 transition";
+      document.getElementById("btn-cancel-edit-client").classList.add("hidden");
+      document.getElementById("btn-save-client").innerText = "+ Salvar Cliente na Nuvem";
+      document.getElementById("btn-save-client").className = "w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-2.5 rounded-xl text-xs transition";
+    };
+
+    window.openClientHistoryModal = (digits) => {
+      const c = clientsMap[digits];
+      if (!c) return;
+
+      const orders = getClientOrders(digits);
+      const totalSpent = orders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+
+      document.getElementById("modal-cli-name").innerText = c.name;
+      document.getElementById("modal-cli-sub").innerText = `${c.phone} • ${c.street || ''} ${c.number || ''} ${c.neighborhood ? '- ' + c.neighborhood : ''}`;
+      document.getElementById("modal-cli-total-orders").innerText = orders.length;
+      document.getElementById("modal-cli-total-spent").innerText = formatBRL(totalSpent);
+
+      const listEl = document.getElementById("modal-cli-orders-list");
+      const stepBadges = {
+        1: `<span class="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full text-[10px] font-extrabold">1. Enviado</span>`,
+        2: `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[10px] font-extrabold">2. Recebido</span>`,
+        3: `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-extrabold">3. Saiu Entrega</span>`,
+        4: `<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-extrabold">4. Entregue</span>`
+      };
+
+      if (orders.length === 0) {
+        listEl.innerHTML = `<div class="text-center py-8 text-gray-400 text-xs">Este cliente ainda não possui pedidos registrados.</div>`;
+      } else {
+        listEl.innerHTML = orders.map(o => {
+          const dateRaw = getOrderDateStr(o);
+          const [yyyy, mm, dd] = dateRaw.split("-");
+          const timeStr = formatTimeFromTimestamp(o.createdAt);
+          const itemsStr = (o.items || []).map(it => `${it.qty}x ${it.name} (${formatBRL(it.subtotal || 0)})`).join("<br/>");
+
+          return `
+            <div class="bg-gray-50 border border-gray-200 rounded-2xl p-3.5 space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-black text-orange-600">#${o.id}</span>
+                  <span class="text-[11px] font-bold text-gray-600">📅 ${dd}/${mm}/${yyyy}${timeStr ? ' às ' + timeStr : ''}</span>
+                </div>
+                ${stepBadges[o.step || 1]}
+              </div>
+
+              <div class="text-xs text-gray-800 font-medium leading-relaxed bg-white p-2.5 rounded-xl border border-gray-100">
+                ${itemsStr || "Itens não detalhados"}
+              </div>
+
+              <div class="flex items-center justify-between text-xs pt-0.5">
+                <span class="text-gray-600 font-semibold">💳 ${o.payment || "Não informado"}</span>
+                <span class="font-black text-emerald-700 text-sm">Pago: ${formatBRL(o.total)}</span>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      document.getElementById("client-history-modal").classList.remove("hidden");
+    };
+
+    window.closeClientHistoryModal = () => {
+      document.getElementById("client-history-modal").classList.add("hidden");
+    };
 
     window.saveClient = async () => {
       if (!db) return alert("Configure o Firebase primeiro!");
+      const editingDigits = document.getElementById("cli-editing-digits").value.trim();
       const name = document.getElementById("cli-name").value.trim();
       const phone = document.getElementById("cli-phone").value.trim();
       const digits = phone.replace(/\D/g, "");
@@ -687,6 +863,11 @@
       if (!isNaN(p20) && p20 > 0) specialPrices.p20 = p20;
       if (!isNaN(p45) && p45 > 0) specialPrices.p45 = p45;
 
+      // Se o telefone do cliente foi alterado durante a edição, remove o registro antigo
+      if (editingDigits && editingDigits !== digits) {
+        await remove(ref(db, `clients/${editingDigits}`));
+      }
+
       await set(ref(db, `clients/${digits}`), {
         name,
         phone,
@@ -697,16 +878,17 @@
         updatedAt: Date.now()
       });
 
-      ["cli-name", "cli-phone", "cli-street", "cli-number", "cli-neighborhood", "cli-p13", "cli-p20", "cli-p45"].forEach(id => {
-        document.getElementById(id).value = "";
-      });
-      showToast("Cliente salvo na nuvem!");
+      cancelEditClient();
+      showToast(editingDigits ? "Cadastro do cliente atualizado!" : "Cliente salvo na nuvem!");
     };
 
     window.deleteClient = async (digits) => {
       if (!db) return;
       if (confirm("Excluir este cliente?")) {
         await remove(ref(db, `clients/${digits}`));
+        if (document.getElementById("cli-editing-digits").value === digits) {
+          cancelEditClient();
+        }
         showToast("Cliente removido!");
       }
     };
