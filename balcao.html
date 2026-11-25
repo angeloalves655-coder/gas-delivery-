@@ -16,6 +16,24 @@
     }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @media print {
+      body * { visibility: hidden !important; }
+      #thermal-receipt-area, #thermal-receipt-area * { visibility: visible !important; }
+      #thermal-receipt-area {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 58mm !important;
+        padding: 2mm !important;
+        margin: 0 !important;
+        background: #fff !important;
+        color: #000 !important;
+        font-family: 'Courier New', monospace !important;
+        font-size: 11px !important;
+        line-height: 1.25 !important;
+      }
+      @page { margin: 0; size: 58mm auto; }
+    }
   </style>
 </head>
 <body class="min-h-screen bg-gray-900 flex justify-center">
@@ -86,6 +104,34 @@
 
       <!-- ABA 1: PEDIDOS POR DIA & CALENDÁRIO -->
       <section id="pane-orders" class="space-y-3">
+
+        <!-- BARRA IMPRESSORA TÉRMICA BLUETOOTH 58MM (ANDROID / CHROME) -->
+        <div class="bg-white border border-gray-200 rounded-2xl p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg shrink-0">
+              🖨️
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-extrabold text-gray-900">Impressora Térmica 58mm</span>
+                <span id="bt-printer-status" class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                  Desconectada
+                </span>
+              </div>
+              <p class="text-[10px] text-gray-500 mt-0.5">Conecte via Bluetooth no Android/Chrome para imprimir na hora</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <label class="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-gray-700 cursor-pointer">
+              <input type="checkbox" id="auto-print-toggle" onchange="toggleAutoPrint(this.checked)" class="accent-orange-600" />
+              <span>Auto-Imprimir</span>
+            </label>
+            <button type="button" onclick="connectBluetoothPrinter()" id="btn-connect-bt" class="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-xl shadow-2xs active:scale-95 transition">
+              🔗 Conectar Bluetooth
+            </button>
+          </div>
+        </div>
         
         <!-- Seletor de Data (Calendário) + Resumo do Dia -->
         <div class="bg-gray-900 text-white rounded-2xl p-4 shadow-md space-y-3">
@@ -299,6 +345,9 @@
 
   </div>
 
+  <!-- ÁREA OCULTA PARA IMPRESSÃO TÉRMICA PADRÃO (FALLBACK) -->
+  <div id="thermal-receipt-area" class="hidden print:block"></div>
+
   <!-- FIREBASE SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -399,8 +448,31 @@
         }
       });
 
+      let isInitialOrdersLoad = true;
+      let knownOrderIds = new Set();
+
       onValue(ref(db, "orders"), (snapshot) => {
-        ordersMap = snapshot.exists() ? snapshot.val() : {};
+        const incoming = snapshot.exists() ? snapshot.val() : {};
+        const incomingIds = Object.keys(incoming);
+
+        if (isInitialOrdersLoad) {
+          incomingIds.forEach(id => knownOrderIds.add(id));
+          isInitialOrdersLoad = false;
+        } else {
+          incomingIds.forEach(id => {
+            if (!knownOrderIds.has(id)) {
+              knownOrderIds.add(id);
+              const newOrder = incoming[id];
+              playNewOrderBeep();
+              showToast(`🔔 Novo pedido #${id} recebido!`);
+              if (autoPrintEnabled && newOrder && (newOrder.step || 1) === 1) {
+                setTimeout(() => printOrderReceipt(id), 400);
+              }
+            }
+          });
+        }
+
+        ordersMap = incoming;
         renderLiveOrders();
         renderClients();
       });
@@ -538,7 +610,13 @@
               </span>
             </div>
 
-            <div>${itemsHtml}</div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>${itemsHtml}</div>
+              <button type="button" onclick="printOrderReceipt('${o.id}')" class="bg-gray-900 hover:bg-gray-800 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-2xs active:scale-95 transition shrink-0">
+                <span>🖨️</span>
+                <span>Imprimir Comanda</span>
+              </button>
+            </div>
 
             <div class="grid grid-cols-4 gap-1.5 pt-1">
               <button onclick="updateOrderStep('${o.id}', 1)" class="py-2 px-1 rounded-xl text-[10px] font-extrabold border ${step === 1 ? 'bg-orange-600 text-white border-orange-600' : 'bg-gray-50 text-gray-600 border-gray-200'}">
@@ -931,6 +1009,233 @@
 
       await set(ref(db, "config"), state);
       showToast("Configurações salvas e aplicadas aos clientes!");
+    };
+
+    // =========================================================================
+    // IMPRESSORA TÉRMICA BLUETOOTH 58MM (ESC/POS) + ALERTA SONORO
+    // =========================================================================
+    let btDevice = null;
+    let btCharacteristic = null;
+    let autoPrintEnabled = localStorage.getItem("balcao_auto_print") === "true";
+
+    const autoPrintCheckbox = document.getElementById("auto-print-toggle");
+    if (autoPrintCheckbox) autoPrintCheckbox.checked = autoPrintEnabled;
+
+    window.toggleAutoPrint = (checked) => {
+      autoPrintEnabled = checked;
+      localStorage.setItem("balcao_auto_print", checked ? "true" : "false");
+      showToast(checked ? "Auto-impressão ativada!" : "Auto-impressão desativada.");
+    };
+
+    function playNewOrderBeep() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.45);
+      } catch (e) {}
+    }
+
+    function updateBtStatusUI(connected, label) {
+      const badge = document.getElementById("bt-printer-status");
+      const btn = document.getElementById("btn-connect-bt");
+      if (!badge || !btn) return;
+      if (connected) {
+        badge.innerText = `🟢 ${label || "Conectada"}`;
+        badge.className = "text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full";
+        btn.innerText = "✅ Impressora Pronta";
+        btn.className = "bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-xl shadow-2xs transition";
+      } else {
+        badge.innerText = "Desconectada";
+        badge.className = "text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full";
+        btn.innerText = "🔗 Conectar Bluetooth";
+        btn.className = "bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-xl shadow-2xs active:scale-95 transition";
+      }
+    }
+
+    window.connectBluetoothPrinter = async () => {
+      if (!navigator.bluetooth) {
+        alert("Este navegador não suporta Bluetooth direto. No Android, use o Google Chrome. Se preferir, toque em 'Imprimir Comanda' para usar o app RawBT ou impressão do sistema.");
+        return;
+      }
+      try {
+        btDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [
+            "000018f0-0000-1000-8000-00805f9b34fb",
+            "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
+            "49535343-fe7d-4ae5-8fa9-9fafd205e455",
+            "0000ff00-0000-1000-8000-00805f9b34fb"
+          ]
+        });
+
+        btDevice.addEventListener("gattserverdisconnected", () => {
+          btCharacteristic = null;
+          updateBtStatusUI(false);
+        });
+
+        const server = await btDevice.gatt.connect();
+        const services = await server.getPrimaryServices();
+        let foundChar = null;
+
+        for (const service of services) {
+          const chars = await service.getCharacteristics();
+          for (const c of chars) {
+            if (c.properties.write || c.properties.writeWithoutResponse) {
+              foundChar = c;
+              break;
+            }
+          }
+          if (foundChar) break;
+        }
+
+        if (!foundChar) {
+          alert("Não foi possível encontrar canal de escrita nesta impressora. Use o app gratuito RawBT no Android.");
+          return;
+        }
+
+        btCharacteristic = foundChar;
+        updateBtStatusUI(true, btDevice.name || "58mm Conectada");
+        showToast("Impressora Bluetooth conectada!");
+      } catch (err) {
+        console.error(err);
+        if (err.name !== "NotFoundError") {
+          alert("Erro ao conectar Bluetooth: " + err.message);
+        }
+      }
+    };
+
+    function removeAccents(str) {
+      return String(str || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\x20-\x7E\n]/g, "");
+    }
+
+    function buildEscPosReceipt(order) {
+      const line = "--------------------------------\n";
+      const dLine = "================================\n";
+      const dateRaw = getOrderDateStr(order);
+      const [yyyy, mm, dd] = dateRaw.split("-");
+      const timeStr = formatTimeFromTimestamp(order.createdAt);
+
+      let text = "";
+      text += "\x1B\x40"; // Reset impressora
+      text += "\x1B\x61\x01"; // Centralizar
+      text += "\x1B\x45\x01"; // Negrito ON
+      text += removeAccents(state.storeName).toUpperCase() + "\n";
+      text += "PEDIDO #" + order.id + "\n";
+      text += "\x1B\x45\x00"; // Negrito OFF
+      text += `${dd}/${mm}/${yyyy} ${timeStr ? "as " + timeStr : ""}\n`;
+      text += dLine;
+
+      text += "\x1B\x61\x00"; // Alinhar esquerda
+      text += "\x1B\x45\x01CLIENTE:\x1B\x45\x00 " + removeAccents(order.customerName) + "\n";
+      text += "\x1B\x45\x01FONE:\x1B\x45\x00 " + removeAccents(order.customerPhone) + "\n";
+      text += "\x1B\x45\x01ENDERECO:\x1B\x45\x00\n";
+      text += removeAccents(order.address) + "\n";
+      if (order.obs) {
+        text += "\x1B\x45\x01OBS:\x1B\x45\x00 " + removeAccents(order.obs) + "\n";
+      }
+      text += line;
+
+      text += "\x1B\x45\x01ITENS DO PEDIDO:\x1B\x45\x00\n";
+      (order.items || []).forEach(it => {
+        const sub = formatBRL(it.subtotal || 0);
+        text += `${it.qty}x ${removeAccents(it.name)}\n`;
+        text += `   Subtotal: ${sub}\n`;
+      });
+      text += line;
+
+      if (order.coupon && Number(order.discount) > 0) {
+        text += `Cupom (${removeAccents(order.coupon)}): -${formatBRL(order.discount)}\n`;
+      }
+      text += "\x1B\x45\x01";
+      text += `TOTAL: ${formatBRL(order.total)}\n`;
+      text += `PAGAMENTO: ${removeAccents(order.payment)}\n`;
+      text += "\x1B\x45\x00";
+      text += dLine;
+      text += "\x1B\x61\x01";
+      text += "Obrigado pela preferencia!\n\n\n\n";
+
+      const encoder = new TextEncoder();
+      return encoder.encode(text);
+    }
+
+    async function sendBytesToBluetooth(bytes) {
+      const chunkSize = 100;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.slice(i, i + chunkSize);
+        if (btCharacteristic.properties.writeWithoutResponse) {
+          await btCharacteristic.writeValueWithoutResponse(chunk);
+        } else {
+          await btCharacteristic.writeValue(chunk);
+        }
+        await new Promise(r => setTimeout(r, 25));
+      }
+    }
+
+    window.printOrderReceipt = async (orderId) => {
+      const order = ordersMap[orderId];
+      if (!order) return;
+
+      // 1. Se a impressora Bluetooth estiver pareada no Chrome, imprime direto via ESC/POS
+      if (btCharacteristic) {
+        try {
+          const bytes = buildEscPosReceipt(order);
+          await sendBytesToBluetooth(bytes);
+          showToast(`Comanda #${orderId} impressa na térmica!`);
+          return;
+        } catch (err) {
+          console.error("Falha na impressão BT:", err);
+          alert("Falha ao enviar para impressora Bluetooth. Abrindo impressão padrão...");
+        }
+      }
+
+      // 2. Fallback: impressão térmica 58mm nativa do Android (funciona com RawBT ou serviço de impressão)
+      const dateRaw = getOrderDateStr(order);
+      const [yyyy, mm, dd] = dateRaw.split("-");
+      const timeStr = formatTimeFromTimestamp(order.createdAt);
+      const itemsHtml = (order.items || [])
+        .map(it => `<div style="margin-bottom:4px;"><strong>${it.qty}x ${it.name}</strong><br/>Subtotal: ${formatBRL(it.subtotal || 0)}</div>`)
+        .join("");
+
+      const area = document.getElementById("thermal-receipt-area");
+      area.innerHTML = `
+        <div style="text-align:center; border-bottom:1px dashed #000; padding-bottom:6px; margin-bottom:6px;">
+          <strong style="font-size:13px;">${state.storeName.toUpperCase()}</strong><br/>
+          <strong>PEDIDO #${order.id}</strong><br/>
+          <span>${dd}/${mm}/${yyyy} ${timeStr ? "às " + timeStr : ""}</span>
+        </div>
+        <div style="border-bottom:1px dashed #000; padding-bottom:6px; margin-bottom:6px;">
+          <strong>Cliente:</strong> ${order.customerName}<br/>
+          <strong>WhatsApp:</strong> ${order.customerPhone}<br/>
+          <strong>Endereço:</strong> ${order.address}
+          ${order.obs ? `<br/><strong>Obs:</strong> ${order.obs}` : ""}
+        </div>
+        <div style="border-bottom:1px dashed #000; padding-bottom:6px; margin-bottom:6px;">
+          ${itemsHtml}
+        </div>
+        <div style="border-bottom:1px dashed #000; padding-bottom:6px; margin-bottom:6px;">
+          ${order.coupon && Number(order.discount) > 0 ? `Cupom (${order.coupon}): -${formatBRL(order.discount)}<br/>` : ""}
+          <strong style="font-size:13px;">TOTAL: ${formatBRL(order.total)}</strong><br/>
+          <strong>Pagamento:</strong> ${order.payment}
+        </div>
+        <div style="text-align:center; margin-top:6px;">
+          Obrigado pela preferência!
+        </div>
+      `;
+
+      window.print();
     };
   </script>
 </body>
